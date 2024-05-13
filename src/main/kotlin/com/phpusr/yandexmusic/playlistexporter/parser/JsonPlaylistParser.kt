@@ -2,6 +2,8 @@ package com.phpusr.yandexmusic.playlistexporter.parser
 
 import com.google.gson.Gson
 import com.phpusr.yandexmusic.playlistexporter.dto.Out
+import com.phpusr.yandexmusic.playlistexporter.dto.Playlist
+import com.phpusr.yandexmusic.playlistexporter.dto.Track
 import java.io.File
 import java.net.URL
 
@@ -14,19 +16,46 @@ object JsonPlaylistParser {
     private const val PlaylistsDirName = "playlists"
 
     fun parse(username: String, playlistId: Int) {
-        val json = URL("$PlaylistURL?owner=$username&kinds=$playlistId").readText()
-        val out = Gson().fromJson(json, Out::class.java)
+        val playlist = getPlaylist(username, playlistId);
+
+        println("> Found ${playlist.tracks.size} tracks in playlist \"$username - ${playlist.title}\"")
 
         File(PlaylistsDirName).mkdir()
-        val outFileName = "$username - ${out.playlist.title}.txt"
+        writeFile(0, playlist.tracks.size, playlist.tracks, username, playlist.title)
+
+    }
+
+    fun parseByChunk(username: String, playlistId: Int, limit: Int) {
+        val playlist = getPlaylist(username, playlistId);
+
+        println("> Found ${playlist.tracks.size} tracks in playlist \"$username - ${playlist.title}\"")
+
+        File(PlaylistsDirName).mkdir()
+
+        val chunkedTracks = playlist.tracks.chunked(limit);
+        var from = 0;
+        var to = 0;
+        for (chunk in chunkedTracks) {
+            to += chunk.size
+            writeFile(from, to, chunk, username, playlist.title)
+            from += chunk.size;
+        }
+    }
+
+    fun writeFile(from: Int, to: Int, tracks: List<Track>, username: String, playlistTitle: String) {
+        val outFileName = "$username - ${playlistTitle} $from-$to.txt"
         val outTxtFile = File("$PlaylistsDirName/$outFileName")
         outTxtFile.delete()
-
-        out.playlist.tracks.forEach { track ->
+        tracks.forEach { track ->
             outTxtFile.appendText("${track.artists.joinToString{ it.name }} - ${track.title}\n")
         }
 
-        println("> Found ${out.playlist.tracks.size} tracks in playlist \"$username - ${out.playlist.title}\"")
         println(" - Go to: $TuneMyMusicUrl, select option \"File\" and import the file: \"${outTxtFile.absoluteFile}\"")
+    }
+
+    fun getPlaylist(username: String, playlistId: Int): Playlist {
+        val json = URL("$PlaylistURL?owner=$username&kinds=$playlistId").readText()
+        val out = Gson().fromJson(json, Out::class.java)
+        return out.playlist;
     }
 }
